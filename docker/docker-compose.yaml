@@ -1,0 +1,38 @@
+version: '3.8'
+name: product-service
+services:
+  postgres:
+    image: "postgres:17.6"
+    container_name: postgres-products
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "product-service"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_PASSWORD: admin
+      POSTGRES_USER: product-service
+      POSTGRES_DB: product-service
+    ports:
+      - "5432:5432"
+  rabbitmq:
+    image: "rabbitmq:4.1.4"
+    container_name: rabbitmq-products
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+  app:
+    container_name: product-service
+    ports:
+      - "8200:8200"
+    build:
+      context: ../
+      dockerfile: docker/dev.Dockerfile
+    depends_on:
+      postgres:
+          condition: service_healthy
