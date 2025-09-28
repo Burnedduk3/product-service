@@ -19,6 +19,8 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.25'
+      - name: install dependencies
+        run: go mod download
       - name: Test
         run: go test -v ./...
 
@@ -32,7 +34,8 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.25'
-
+      - name: install dependencies
+        run: go mod download
       - name: Build
         run: go build -o product-service .
       - name: upload artifact
