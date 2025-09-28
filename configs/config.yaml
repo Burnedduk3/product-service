@@ -4,12 +4,12 @@ environment: development
 version: 1.0.0
 
 server:
-  port: "8090"
+  port: "8100"
   host: "0.0.0.0"
   read_timeout: "30s"
   write_timeout: "30s"
   cors:
-    allow_origins: ["http://localhost:3000"]
+    allow_origins: ["*"]
 
 database:
   host: "localhost"
@@ -18,7 +18,6 @@ database:
   password: "admin"
   database: "product-service"
   ssl_mode: "disable"
-
 
 security:
   rate_limit_rps: 100

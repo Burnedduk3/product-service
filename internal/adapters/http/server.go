@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"product-service/internal/adapters/http/handlers"
 	"product-service/internal/adapters/http/middlewares/logging"
+	"product-service/internal/adapters/persistence/product_repository"
+	"product-service/internal/application/usecases"
 	"product-service/internal/config"
 	"product-service/internal/infrastructure"
 	"product-service/pkg/logger"
@@ -17,7 +19,7 @@ type Server struct {
 	echo        *echo.Echo
 	config      *config.Config
 	logger      logger.Logger
-	connections *infrastructure.DatabaseConnections // Add this
+	connections *infrastructure.DatabaseConnections
 }
 
 func NewServer(cfg *config.Config, log logger.Logger, connections *infrastructure.DatabaseConnections) (*Server, error) {
@@ -31,7 +33,7 @@ func NewServer(cfg *config.Config, log logger.Logger, connections *infrastructur
 		echo:        e,
 		config:      cfg,
 		logger:      log,
-		connections: connections, // Add this
+		connections: connections,
 	}
 
 	// Setup middleware
@@ -77,7 +79,12 @@ func (s *Server) setupMiddleware() {
 
 func (s *Server) setupRoutes() {
 	// Health check handlers with database connections
-	healthHandler := handlers.NewHealthHandler(s.logger, s.connections) // Updated
+	healthHandler := handlers.NewHealthHandler(s.logger, s.connections)
+
+	// Product repository and use cases setup
+	productRepo := product_repository.NewGormProductRepository(s.connections.GetGormDB())
+	productUseCases := usecases.NewProductUseCases(productRepo, s.logger)
+	productHandler := handlers.NewProductHandler(productUseCases, s.logger)
 
 	// API v1 routes
 	v1 := s.echo.Group("/api/v1")
@@ -89,16 +96,52 @@ func (s *Server) setupRoutes() {
 
 	// Metrics endpoint
 	v1.GET("/metrics", healthHandler.Metrics)
+
+	// Product endpoints
+	products := v1.Group("/products")
+	{
+		// Core CRUD operations
+		products.POST("", productHandler.CreateProduct)    // Create product
+		products.GET("", productHandler.ListProducts)      // List products with pagination
+		products.GET("/:id", productHandler.GetProduct)    // Get product by ID
+		products.PUT("/:id", productHandler.UpdateProduct) // Update product
+
+		// SKU-based operations
+		products.GET("/sku/:sku", productHandler.GetProductBySKU) // Get product by SKU
+
+		// Stock management
+		products.PATCH("/:id/stock", productHandler.UpdateProductStock) // Update stock only
+
+		// Price management
+		products.PATCH("/:id/price", productHandler.UpdateProductPrice) // Update price only
+
+		// Status management
+		products.PATCH("/:id/activate", productHandler.ActivateProduct)       // Activate product
+		products.PATCH("/:id/deactivate", productHandler.DeactivateProduct)   // Deactivate product
+		products.PATCH("/:id/discontinue", productHandler.DiscontinueProduct) // Discontinue product
+	}
+
+	s.logRegisteredRoutes()
+}
+
+func (s *Server) logRegisteredRoutes() {
+	s.logger.Info("HTTP routes registered:")
+	for _, route := range s.echo.Routes() {
+		s.logger.Info("Route registered",
+			"method", route.Method,
+			"path", route.Path,
+			"name", route.Name)
+	}
 }
 
 func (s *Server) Start() error {
 	address := fmt.Sprintf("%s:%s", s.config.Server.Host, s.config.Server.Port)
-	s.logger.Info("Starting HTTP server", "address", address)
+	s.logger.Info("Starting Product Service HTTP server", "address", address)
 
 	return s.echo.Start(address)
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.logger.Info("Shutting down HTTP server...")
+	s.logger.Info("Shutting down Product Service HTTP server...")
 	return s.echo.Shutdown(ctx)
 }

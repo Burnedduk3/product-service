@@ -4,17 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"product-service/internal/adapters/messaging/rabbitmq"
-	"product-service/internal/adapters/persistence/postgres"
-	"product-service/internal/application/ports"
+	gormConn "product-service/internal/adapters/persistence/postgres"
 	"product-service/internal/config"
 	"product-service/pkg/logger"
+
+	"gorm.io/gorm"
 )
 
 type DatabaseConnections struct {
-	Postgres *postgres.PostgresDB
-	RabbitMQ *rabbitmq.RabbitMQClient
-	logger   logger.Logger
+	conn   *gormConn.GormDB
+	logger logger.Logger
 }
 
 func NewDatabaseConnections(cfg *config.Config, logger logger.Logger) (*DatabaseConnections, error) {
@@ -22,25 +21,16 @@ func NewDatabaseConnections(cfg *config.Config, logger logger.Logger) (*Database
 
 	// PostgreSQL connection
 	log.Info("Connecting to PostgreSQL...")
-	pg, err := postgres.NewPostgresConnection(&cfg.Database, logger)
+	pg, err := gormConn.NewGormConnection(cfg, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
-	}
-
-	// RabbitMQ connection
-	log.Info("Connecting to RabbitMQ...")
-	rmq, err := rabbitmq.NewRabbitMQConnection(&cfg.RabbitMQ, logger)
-	if err != nil {
-		pg.Close()
-		return nil, fmt.Errorf("failed to connect to rabbitmq: %w", err)
+		return nil, fmt.Errorf("failed to connect to gormConn: %w", err)
 	}
 
 	log.Info("All database connections established successfully")
 
 	return &DatabaseConnections{
-		Postgres: pg,
-		RabbitMQ: rmq,
-		logger:   log,
+		conn:   pg,
+		logger: log,
 	}, nil
 }
 
@@ -49,12 +39,8 @@ func (d *DatabaseConnections) Close() error {
 
 	var errs []error
 
-	if err := d.RabbitMQ.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("rabbitmq close error: %w", err))
-	}
-
-	if err := d.Postgres.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("postgres close error: %w", err))
+	if err := d.conn.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("gormConn close error: %w", err))
 	}
 
 	if len(errs) > 0 {
@@ -68,16 +54,11 @@ func (d *DatabaseConnections) Close() error {
 func (d *DatabaseConnections) HealthCheck(ctx context.Context) map[string]error {
 	checks := make(map[string]error)
 
-	checks["postgres"] = d.Postgres.HealthCheck(ctx)
-	checks["rabbitmq"] = d.RabbitMQ.HealthCheck(ctx)
+	checks["postgress"] = d.conn.HealthCheck(ctx)
 
 	return checks
 }
 
-func (d *DatabaseConnections) GetMessagePublisher() ports.MessagePublisher {
-	return d.RabbitMQ
-}
-
-func (d *DatabaseConnections) GetMessageConsumer() ports.MessageConsumer {
-	return d.RabbitMQ
+func (d *DatabaseConnections) GetGormDB() *gorm.DB {
+	return d.conn.DB()
 }
