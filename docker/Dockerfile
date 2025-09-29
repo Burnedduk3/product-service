@@ -12,5 +12,5 @@ WORKDIR /app
 
 COPY --chown=product-service --chmod=500 product-service ./product-service
 
-ENTRYPOINT ["./product-service", "server"]
+ENTRYPOINT ["ls && ./product-service", "server"]
 
