@@ -1,4 +1,4 @@
-FROM alpine:3.22
+FROM ubuntu:25.04
 
 RUN mkdir -p /etc/product-service
 COPY configs/config-docker.yaml /etc/product-service/config.yaml
